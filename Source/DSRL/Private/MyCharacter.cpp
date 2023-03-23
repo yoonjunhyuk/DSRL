@@ -1,4 +1,6 @@
 #include "MyCharacter.h"
+#include "MyCharacterAnim.h"
+#include "MyEnemyFSM.h"
 
 // Sets default values
 AMyCharacter::AMyCharacter()
@@ -10,7 +12,7 @@ AMyCharacter::AMyCharacter()
 	if (TempChar.Succeeded())
 	{
 		GetMesh()->SetSkeletalMesh(TempChar.Object);
-		GetMesh()->SetRelativeLocationAndRotation(FVector(0.0f, 0.0f, -90.0f), FRotator(0.0f, -88.0f, 0.0f));
+		GetMesh()->SetRelativeLocationAndRotation(FVector(0.0f, 0.0f, -88.0f), FRotator(0.0f, -90.0f, 0.0f));
 	}
 
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SPRINGARM"));
@@ -27,6 +29,10 @@ AMyCharacter::AMyCharacter()
 
 	bUseControllerRotationYaw = true;
 	GetCharacterMovement()->JumpZVelocity = 600.0f;
+
+	IsAttacking = false;
+	MaxCombo = 3;
+	AttackEndCombo();
 }
 
 // Called when the game starts or when spawned
@@ -45,6 +51,25 @@ void AMyCharacter::Tick(float DeltaTime)
 	Move();
 }
 
+void AMyCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+
+	MyAnim = Cast<UMyCharacterAnim>(GetMesh()->GetAnimInstance());
+	MyAnim->OnMontageEnded.AddDynamic(this, &AMyCharacter::OnAttackMontageEnded);
+	
+	MyAnim->OnNextAttackCheck.AddLambda([this]() -> void {
+		CanNextCombo = false;
+		if (IsComboInputOn)
+		{
+			AttackStartCombo();
+			MyAnim->JumpToAttackMontageSection(CurrentCombo);
+		}
+	});
+
+	MyAnim->OnAttackHitCheck.AddUObject(this, &AMyCharacter::AttackCheck);
+}
+
 // Called to bind functionality to input
 void AMyCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -53,6 +78,7 @@ void AMyCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	PlayerInputComponent->BindAction(TEXT("Jump"), IE_Pressed, this, &AMyCharacter::InputJump);
 	PlayerInputComponent->BindAction(TEXT("Run"), IE_Pressed, this, &AMyCharacter::InputRun);
 	PlayerInputComponent->BindAction(TEXT("Run"), IE_Released, this, &AMyCharacter::InputRun);
+	PlayerInputComponent->BindAction(TEXT("Attack"), IE_Pressed, this, &AMyCharacter::InputAttack);
 
 	PlayerInputComponent->BindAxis(TEXT("Turn"), this, &AMyCharacter::Turn);
 	PlayerInputComponent->BindAxis(TEXT("LookUp"), this, &AMyCharacter::LookUp);
@@ -103,4 +129,89 @@ void AMyCharacter::InputRun()
 	{
 		Movement->MaxWalkSpeed = RunSpeed;
 	}
+}
+
+void AMyCharacter::InputAttack()
+{
+	if (IsAttacking)
+	{
+		if (CanNextCombo)
+		{
+			IsComboInputOn = true;
+		}
+	}
+	else
+	{
+		AttackStartCombo();
+		MyAnim->PlayAttackMontage();
+		MyAnim->JumpToAttackMontageSection(CurrentCombo);
+		IsAttacking = true;
+	}
+}
+
+void AMyCharacter::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	IsAttacking = false;
+	AttackEndCombo();
+}
+
+void AMyCharacter::AttackStartCombo()
+{
+	CanNextCombo = true;
+	IsComboInputOn = false;
+	CurrentCombo = FMath::Clamp<int32>(CurrentCombo + 1, 1, MaxCombo);
+}
+
+void AMyCharacter::AttackEndCombo()
+{
+	IsComboInputOn = false;
+	CanNextCombo = false;
+	CurrentCombo = 0;
+}
+
+void AMyCharacter::AttackCheck()
+{
+	FHitResult HitResult;
+	FCollisionQueryParams Params(NAME_None, false, this);
+	bool bResult = GetWorld()->SweepSingleByChannel(
+		HitResult,
+		GetActorLocation(),
+		GetActorLocation() + GetActorForwardVector() * 200.0f,
+		FQuat::Identity,
+		ECollisionChannel::ECC_GameTraceChannel2,
+		FCollisionShape::MakeSphere(50.0f),
+		Params);
+
+	if (bResult)
+	{
+		if (HitResult.Actor.IsValid())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Hit Actor Name : %s"), *HitResult.Actor->GetName());
+
+			FDamageEvent DamageEvent;
+			HitResult.Actor->TakeDamage(1.0f, DamageEvent, GetController(), this);
+
+			auto Enemy = HitResult.GetActor()->GetDefaultSubobjectByName(TEXT("FSM"));
+			if (Enemy)
+			{
+				auto EnemyFSM = Cast<UMyEnemyFSM>(Enemy);
+				EnemyFSM->OnDamageProcess();
+			}
+		}
+	}
+}
+
+float AMyCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
+{
+	float FinalDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	UE_LOG(LogTemp, Warning, TEXT("Actor : %s"), *GetName());
+
+	// 내 죽음 모션(체력?)
+	if (FinalDamage > 0.0f)
+	{
+		MyAnim->SetDeadAnim();
+		SetActorEnableCollision(false);
+	}
+
+	return FinalDamage;
 }

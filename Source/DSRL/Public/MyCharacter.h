@@ -26,6 +26,10 @@ public:
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
+	virtual void PostInitializeComponents() override;
+
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+
 public:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
 	USpringArmComponent* SpringArm;
@@ -39,6 +43,27 @@ public:
 	UPROPERTY(EditAnywhere, Category = Player)
 	float RunSpeed = 800;
 
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Attack)
+	bool CanNextCombo;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Attack)
+	bool IsComboInputOn;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Attack)
+	int32 CurrentCombo;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Attack)
+	int32 MaxCombo;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Attack)
+	float AttackRange = 200.0f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = Attack)
+	float AttackRadius = 50.0f;
+
+	UPROPERTY()
+	class UMyCharacterAnim* MyAnim;
+
 	void Turn(float value);
 	void LookUp(float value);
 	void InputHorizontal(float value);
@@ -46,6 +71,16 @@ public:
 	void Move();
 	void InputJump();
 	void InputRun();
+	void InputAttack();
+
+	void AttackStartCombo();
+	void AttackEndCombo();
+	void AttackCheck();
 
 	FVector Direction;
+
+	UFUNCTION()
+	void OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+	bool IsAttacking;
 };
