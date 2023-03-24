@@ -33,6 +33,8 @@ AMyCharacter::AMyCharacter()
 	IsAttacking = false;
 	MaxCombo = 3;
 	AttackEndCombo();
+
+	GetCapsuleComponent()->SetCollisionProfileName(TEXT("MyCharacter"));
 }
 
 // Called when the game starts or when spawned
@@ -204,9 +206,7 @@ void AMyCharacter::AttackCheck()
 float AMyCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
 {
 	float FinalDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
-	UE_LOG(LogTemp, Warning, TEXT("Actor : %s"), *GetName());
 
-	// 내 죽음 모션(체력?)
 	if (FinalDamage > 0.0f)
 	{
 		MyAnim->SetDeadAnim();

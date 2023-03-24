@@ -16,10 +16,9 @@ void UMyCharacterAnim::NativeUpdateAnimation(float DeltaSeconds)
 	Super::NativeUpdateAnimation(DeltaSeconds);
 
 	auto Pawn = TryGetPawnOwner();
+	auto Player = Cast<AMyCharacter>(Pawn);
 
 	if (!::IsValid(Pawn)) return;
-
-	auto Player = Cast<AMyCharacter>(Pawn);
 
 	if (!IsDead)
 	{
